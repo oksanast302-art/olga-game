@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Медкарты Ольги</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; font-family: 'Fredoka One', cursive; background-color: #1a1a1a; }
+        
+        /* Фон игры */
+        #game-container {
+            width: 100vw; height: 100vh;
+            background-image: url('https://i.postimg.cc/0jY4rqNF/c58f624a2d7845b5b87972c6ffb95cbf.png');
+            background-size: cover; background-position: center;
+            position: relative;
+        }
+
+        /* Верхняя панель (Подозрение) */
+        #top-panel {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.85); padding: 10px 20px; border-radius: 10px;
+            border: 2px solid #ff3333; color: #fff; z-index: 50; display: flex; align-items: center; gap: 15px;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.5);
+        }
+        #suspicion-bar-bg {
+            width: 200px; height: 20px; background: #333; border-radius: 10px; overflow: hidden; border: 1px solid #555;
+        }
+        #suspicion-bar {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #ffcc00, #ff0000); transition: width 0.3s;
+        }
+
+        /* Карточки (медкарты) */
+        .card {
+            position: absolute;
+            width: 60px; height: 80px;
+            background-image: url('https://i.postimg.cc/9MkzDGvj/426f32f84e524529aa985f5a55419d9b.png');
+            background-size: contain; background-repeat: no-repeat;
+            cursor: pointer;
+            
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px; 
+            color: #fdf5e6;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9);
+            z-index: 10;
+
+            /* Переменная для угла поворота */
+            --rot: 0deg;
+            transform: rotate(var(--rot));
+            transition: transform 0.2s, opacity 0.5s, filter 0.2s;
+        }
+        .card:hover { 
+            transform: rotate(var(--rot)) scale(1.1); 
+            filter: drop-shadow(0 0 10px #00f2ff); 
+            z-index: 15;
+        }
+        .card.done { 
+            opacity: 0; 
+            pointer-events: none; 
+            transform: rotate(var(--rot)) scale(1.5); 
+        }
+
+        /* НОВЫЕ КООРДИНАТЫ И УГЛЫ НАКЛОНА (подогнаны под скриншот) */
+        #card-0 { top: 54%; left: 18%; --rot: -6deg; }  /* На столе слева */
+        #card-1 { top: 35%; left: 26%; --rot: 8deg; }   /* На полке у окна */
+        #card-2 { top: 61%; left: 43%; --rot: -3deg; }  /* На кушетке */
+        #card-3 { top: 45%; left: 60%; --rot: 5deg; }   /* В шкафу */
+        #card-4 { top: 57%; left: 67%; --rot: -7deg; }  /* На столике под шкафом */
+        #card-5 { top: 72%; left: 78%; --rot: 4deg; }   /* На подносе справа */
+        #card-6 { top: 47%; left: 87%; --rot: -4deg; }  /* На картотеке */
+
+        /* Печать "Утверждено" */
+        .stamp {
+            position: absolute; top: -20px; left: -20px;
+            color: #d90000; border: 3px solid #d90000; padding: 5px 10px;
+            font-size: 16px; font-weight: bold; border-radius: 5px;
+            transform: rotate(-15deg); opacity: 0; pointer-events: none;
+            text-transform: uppercase; background: rgba(255,255,255,0.8);
+            text-shadow: none; white-space: nowrap;
+        }
+        .card.done .stamp { animation: stampAnim 1s forwards; }
+        @keyframes stampAnim {
+            0% { opacity: 0; transform: scale(2) rotate(-15deg); }
+            20% { opacity: 1; transform: scale(1) rotate(-15deg); }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Текст-фидбек */
+        #feedback {
+            position: absolute; bottom: 5%; left: 50%; transform: translateX(-50%);
+            font-size: 32px; color: #fff; text-shadow: 0 0 10px #00f2ff, 0 0 20px #00f2ff;
+            background: rgba(0, 0, 0, 0.85); padding: 15px 30px; border-radius: 15px;
+            border: 2px solid #00f2ff; display: none; z-index: 20; text-align: center;
+        }
+
+        /* Модальное окно вопроса */
+        #modal {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); justify-content: center; align-items: center; z-index: 100;
+        }
+        .modal-content {
+            background: url('https://i.postimg.cc/5NB7SppX/5a5cb7b1c9ca4a3c9c3bdae208b8b9be.png') center/cover;
+            padding: 40px 30px 30px 30px; border-radius: 20px; border: 3px solid #cea469;
+            width: 80%; max-width: 600px; text-align: center; position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+        .modal-content::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.95); border-radius: 17px; z-index: -1;
+        }
+        
+        /* Таймер */
+        #timer-container {
+            position: absolute; top: -15px; left: 10%; width: 80%; height: 20px;
+            background: #333; border-radius: 10px; border: 2px solid #000; overflow: hidden;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        #timer-bar {
+            width: 100%; height: 100%; background: #00f2ff; transition: width 0.1s linear, background 0.3s;
+        }
+        #timer-text {
+            position: absolute; top: -50px; left: 50%; transform: translateX(-50%);
+            font-size: 28px; color: #fff; font-weight: bold; text-shadow: 0 0 10px #000, 0 0 5px #000;
+        }
+
+        /* Подложка для вопроса */
+        h2 { 
+            font-size: 26px; margin-bottom: 20px; color: #111; line-height: 1.4; 
+            background: #fffac2; padding: 15px 20px; border-radius: 10px;
+            border: 2px solid #cea469; box-shadow: inset 0 0 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.2);
+        }
+        
+        .btn {
+            display: block; width: 100%; padding: 15px; margin: 10px 0;
+            background: #cea469; color: #000; border: 2px solid #000; border-radius: 10px;
+            font-family: 'Fredoka One', cursive; font-size: 20px; cursor: pointer;
+            transition: background 0.2s, transform 0.1s; box-shadow: 0 4px 0 #8c6a3d;
+        }
+        .btn:hover { background: #e0bc85; transform: translateY(-2px); box-shadow: 0 6px 0 #8c6a3d; }
+        .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #8c6a3d; }
+        
+        /* Экраны конца игры */
+        .screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); justify-content: center; align-items: center; z-index: 200;
+        }
+        
+        .paper-panel {
+            background-color: #d8c3a5;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(150, 100, 50, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(150, 100, 50, 0.1) 0%, transparent 20%),
+                linear-gradient(to bottom right, #e8d5b7, #c4ad8d);
+            padding: 40px; 
+            border-radius: 8px;
+            border: 2px solid #8c6a3d;
+            border-left: 15px solid #8c6a3d; 
+            width: 80%; max-width: 700px; text-align: center; position: relative;
+            box-shadow: 10px 10px 30px rgba(0,0,0,0.9), inset 0 0 40px rgba(139, 90, 43, 0.3);
+        }
+
+        .paper-panel img { 
+            max-width: 50%; max-height: 300px; border-radius: 5px; 
+            border: 3px solid #554433; margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        
+        .paper-panel h1 { color: #111; font-size: 42px; margin-bottom: 15px; }
+        .paper-panel p { color: #222; font-size: 22px; line-height: 1.5; margin-bottom: 30px; font-weight: bold; }
+        
+        #gameover .paper-panel h1 { color: #a00000; text-shadow: 1px 1px 0 #fff; }
+        #gameover .paper-panel img { border-color: #333; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="top-panel">
+        <span style="font-size: 20px;">🪖 Подозрение охраны:</span>
+        <div id="suspicion-bar-bg"><div id="suspicion-bar"></div></div>
+    </div>
+
+    <div class="card" id="card-0" onclick="openQuestion(0)"><span class="stamp">УТВЕРЖДЕНО</span>1</div>
+    <div class="card" id="card-1" onclick="openQuestion(1)"><span class="stamp">УТВЕРЖДЕНО</span>2</div>
+    <div class="card" id="card-2" onclick="openQuestion(2)"><span class="stamp">УТВЕРЖДЕНО</span>3</div>
+    <div class="card" id="card-3" onclick="openQuestion(3)"><span class="stamp">УТВЕРЖДЕНО</span>4</div>
+    <div class="card" id="card-4" onclick="openQuestion(4)"><span class="stamp">УТВЕРЖДЕНО</span>5</div>
+    <div class="card" id="card-5" onclick="openQuestion(5)"><span class="stamp">УТВЕРЖДЕНО</span>6</div>
+    <div class="card" id="card-6" onclick="openQuestion(6)"><span class="stamp">УТВЕРЖДЕНО</span>7</div>
+
+    <div id="feedback">Карта заполнена. Ребёнок спасён!</div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <div id="timer-container">
+                <div id="timer-bar"></div>
+            </div>
+            <div id="timer-text">15</div>
+            <h2 id="question-text">Вопрос</h2>
+            <div id="answers-container"></div>
+        </div>
+    </div>
+
+    <div id="victory" class="screen">
+        <div class="paper-panel">
+            <img src="https://i.postimg.cc/W4zt7WmD/33410ef15ac140178bf50baa97ba41c1.png" alt="Победа">
+            <h1>Все карты заполнены!</h1>
+            <p>Вы спасли жизни этих детей. Ольга успешно выполнила свое задание в лагере.</p>
+            <button class="btn" style="background: #4CAF50; color: #fff; box-shadow: 0 4px 0 #2E7D32;" onclick="location.reload()">Играть ещё раз</button>
+        </div>
+    </div>
+
+    <div id="gameover" class="screen">
+        <div class="paper-panel">
+            <img src="https://i.postimg.cc/yYgCp0my/219f8685453f444893b9ad0969378eb9.png" alt="Провал">
+            <h1>Вас раскрыли!</h1>
+            <p>Охрана заметила подозрительные записи в картах. Вас арестовали, а дети остались в лагере. Их никто не спас...</p>
+            <button class="btn" style="background: #ff3333; color: #fff; box-shadow: 0 4px 0 #990000;" onclick="location.reload()">Попробовать снова</button>
+        </div>
+    </div>
+</div>
+
+<audio id="sound-tick" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" preload="auto"></audio>
+<audio id="sound-correct" src="https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3" preload="auto"></audio>
+<audio id="sound-wrong" src="https://assets.mixkit.co/active_storage/sfx/2955/2955-preview.mp3" preload="auto"></audio>
+
+<script>
+    const tasks = [
+        { q: "В какой деревне родилась Ольга Евзрезова?", a: ["Жлобин", "Козимирово", "Красный Берег", "Горбачевка"], correct: 2 },
+        { q: "Куда поступила Ольга накануне войны?", a: ["в медицинский институт", "в педагогическое училище", "в фельдшерскую школу", "в школу медсестёр"], correct: 3 },
+        { q: "В какой партизанский отряд ушла Ольга?", a: ["«Красный берег»", "«Победа»", "«Железняк»", "«Народные мстители»"], correct: 2 },
+        { q: "Что нацисты устроили на базе усадьбы Козелл-Поклевских?", a: ["только военный госпиталь", "только детский пересыльный лагерь", "военный госпиталь и детский пересыльный лагерь", "штаб и склад боеприпасов"], correct: 2 },
+        { q: "Сколько детей прошло через детский пересыльный лагерь?", a: ["2000", "1990", "2500", "1500"], correct: 1 },
+        { q: "Кто, рискуя жизнью, ставил детям фиктивные диагнозы?", a: ["партизаны отряда «Железняк»", "немецкие врачи", "местные медики", "сами дети"], correct: 2 },
+        { q: "В каком году родилась Ольга Антоновна Евзрезова?", a: ["1923", "1924", "1925", "1921"], correct: 1 }
+    ];
+
+    let solvedCount = 0;
+    let currentTaskIndex = -1;
+    let suspicion = 0; 
+    
+    let timerInterval;
+    let timeLeft = 15;
+    const MAX_TIME = 15;
+    let lastSecond = 15;
+
+    const sndTick = document.getElementById('sound-tick');
+    const sndCorrect = document.getElementById('sound-correct');
+    const sndWrong = document.getElementById('sound-wrong');
+
+    sndTick.volume = 0.08;
+    sndCorrect.volume = 0.15;
+    sndWrong.volume = 0.15;
+
+    document.body.addEventListener('click', function initAudio() {
+        sndTick.play().catch(()=>{}); sndTick.pause();
+        sndCorrect.play().catch(()=>{}); sndCorrect.pause();
+        sndWrong.play().catch(()=>{}); sndWrong.pause();
+        document.body.removeEventListener('click', initAudio);
+    }, { once: true });
+
+    function playSound(audioEl) {
+        audioEl.currentTime = 0;
+        audioEl.play().catch(e => console.log("Звук заблокирован"));
+    }
+
+    function openQuestion(index) {
+        currentTaskIndex = index;
+        const task = tasks[index];
+        
+        document.getElementById('question-text').innerText = task.q;
+        const answersContainer = document.getElementById('answers-container');
+        answersContainer.innerHTML = '';
+
+        task.a.forEach((answer, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.innerText = answer;
+            btn.onclick = () => checkAnswer(i);
+            answersContainer.appendChild(btn);
+        });
+
+        document.getElementById('modal').style.display = 'flex';
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = MAX_TIME;
+        lastSecond = MAX_TIME;
+        const bar = document.getElementById('timer-bar');
+        const text = document.getElementById('timer-text');
+        
+        bar.style.width = '100%';
+        bar.style.background = '#00f2ff';
+        text.innerText = timeLeft;
+        text.style.color = '#fff';
+
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            
+            bar.style.width = (timeLeft / MAX_TIME * 100) + '%';
+            
+            if (timeLeft < 5) {
+                bar.style.background = '#ff0000';
+                text.style.color = '#ffaaaa';
+            } else if (timeLeft < 10) {
+                bar.style.background = '#ffcc00';
+            }
+
+            if (Math.ceil(timeLeft) < lastSecond) {
+                lastSecond = Math.ceil(timeLeft);
+                text.innerText = lastSecond;
+                if (lastSecond > 0 && lastSecond <= 5) { 
+                    playSound(sndTick);
+                }
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                handleTimeout();
+            }
+        }, 100);
+    }
+
+    function handleTimeout() {
+        document.getElementById('modal').style.display = 'none';
+        addSuspicion(15); 
+        playSound(sndWrong);
+        showFeedback("Слишком долго! Охрана заглянула в кабинет...", "#ff0000");
+    }
+
+    function checkAnswer(selectedIndex) {
+        clearInterval(timerInterval);
+        const task = tasks[currentTaskIndex];
+        
+        if (selectedIndex === task.correct) {
+            document.getElementById('modal').style.display = 'none';
+            
+            const card = document.getElementById('card-' + currentTaskIndex);
+            card.classList.add('done');
+            
+            solvedCount++;
+            playSound(sndCorrect);
+            showFeedback("Карта заполнена. Ребёнок спасён!", "#00f2ff");
+
+            if (solvedCount === tasks.length) {
+                setTimeout(() => {
+                    document.getElementById('feedback').style.display = 'none';
+                    document.getElementById('victory').style.display = 'flex';
+                }, 2000);
+            } else {
+                setTimeout(() => hideFeedback(), 2500);
+            }
+        } else {
+            addSuspicion(25); 
+            playSound(sndWrong);
+            showFeedback("Неверный диагноз! Охрана что-то заподозрила...", "#ff0000");
+            
+            setTimeout(() => {
+                document.getElementById('modal').style.display = 'none';
+            }, 1000);
+        }
+    }
+
+    function addSuspicion(amount) {
+        suspicion += amount;
+        if (suspicion > 100) suspicion = 100;
+        
+        const bar = document.getElementById('suspicion-bar');
+        bar.style.width = suspicion + '%';
+
+        if (suspicion >= 100) {
+            setTimeout(() => {
+                clearInterval(timerInterval);
+                document.getElementById('gameover').style.display = 'flex';
+            }, 1000);
+        }
+    }
+
+    function showFeedback(text, color) {
+        const feedback = document.getElementById('feedback');
+        feedback.innerText = text;
+        feedback.style.color = color === "#ff0000" ? "#ffaaaa" : "#fff";
+        feedback.style.textShadow = `0 0 10px ${color}, 0 0 20px ${color}`;
+        feedback.style.borderColor = color;
+        feedback.style.display = 'block';
+    }
+
+    function hideFeedback() {
+        document.getElementById('feedback').style.display = 'none';
+    }
+</script>
+</body>
+</html>
